@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini-X Pro | Single File Architecture</title>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        :root {
+            /* Color Palette */
+            --bg-surface: #131314;
+            --bg-subtle: #1e1f20;
+            --primary: #a8c7fa;
+            --text-high: #e3e3e3;
+            --text-low: #b4b4b4;
+            --curve: 24px;
+            --font-stack: 'Google Sans', 'Segoe UI', system-ui, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg-surface);
+            color: var(--text-high);
+            font-family: var(--font-stack);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Layout Architecture */
+        #app {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            height: 100%;
+        }
+
+        /* Sidebar Elements */
+        .sidebar {
+            background: var(--bg-subtle);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+            color: var(--text-high);
+            padding: 12px 20px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+            width: fit-content;
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Main Viewport Elements */
+        .chat-viewport {
+            display: flex;
+            flex-direction: column;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .top-nav {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .model-selector span {
+            color: var(--text-low);
+        }
+
+        /* Chat Feed */
+        .feed {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem 2rem 6rem 2rem;
+            scroll-behavior: smooth;
+        }
+
+        .message-row {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            animation: slideUp 0.3s ease-out forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        @keyframes slideUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .avatar.user { background: #5c6bc0; }
+        .avatar.ai { background: linear-gradient(135deg, #4285f4, #d96570); }
+
+        .message-content {
+            line-height: 1.6;
+            font-size: 1rem;
+            color: var(--text-high);
+            max-width: 100%;
+            overflow-wrap: break-word;
+        }
+
+        /* Markdown Styles inside AI responses */
+        .message-content p { margin-bottom: 1rem; }
+        .message-content p:last-child { margin-bottom: 0; }
+        .message-content pre {
+            background: var(--bg-subtle);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        .message-content code {
+            font-family: monospace;
+            background: rgba(255,255,255,0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+        .message-content pre code { background: none; padding: 0; }
+
+        /* Input Area */
+        .input-area {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 2rem 2rem 2rem;
+            background: linear-gradient(to top, var(--bg-surface) 60%, transparent);
+        }
+
+        .composer {
+            background: var(--bg-subtle);
+            border-radius: var(--curve);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: background 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .composer:focus-within {
+            background: #28292a;
+        }
+
+        #prompt-input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: white;
+            height: 36px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .actions button {
+            background: none;
+            border: none;
+            color: var(--text-low);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .actions button:hover {
+            color: var(--text-high);
+        }
+
+        .disclaimer {
+            text-align: center;
+            color: var(--text-low);
+            font-size: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        /* Loading Dots Animation */
+        .typing-indicator {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            height: 24px;
+        }
+        .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--text-low);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(0.5); opacity: 0.5; }
+            50% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Mobile Adaptability */
+        @media (max-width: 768px) {
+            #app { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .top-nav { padding: 1rem; }
+            .feed { padding: 1rem 1rem 6rem 1rem; }
+            .input-area { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <aside class="sidebar">
+            <nav>
+                <button class="btn-primary" onclick="location.reload()">
+                    <i data-lucide="plus"></i> <span>New chat</span>
+                </button>
+            </nav>
+        </aside>
+
+        <main class="chat-viewport">
+            <header class="top-nav">
+                <div class="model-selector">
+                    Gemini <span>1.5 Pro</span> <i data-lucide="chevron-down" style="width: 18px; height: 18px;"></i>
+                </div>
+            </header>
+
+            <section id="chat-feed" class="feed">
+                <div id="welcome-state" style="text-align: center; margin-top: 15vh;">
+                    <h1 style="font-size: 3rem; margin-bottom: 0.5rem; background: linear-gradient(to right, #4285f4, #d96570); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Hello, User</h1>
+                    <p style="color: var(--text-low); font-size: 1.5rem;">How can I help you today?</p>
+                </div>
+            </section>
+
+            <footer class="input-area">
+                <div class="composer">
+                    <input type="text" id="prompt-input" placeholder="Enter a prompt here..." autocomplete="off">
+                    <div class="actions">
+                        <button id="send-btn"><i data-lucide="send-horizontal"></i></button>
+                    </div>
+                </div>
+                <p class="disclaimer">Gemini may display inaccurate info, including about people, so double-check its responses.</p>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        // DOM Elements
+        const feed = document.getElementById('chat-feed');
+        const input = document.getElementById('prompt-input');
+        const sendBtn = document.getElementById('send-btn');
+        const welcomeState = document.getElementById('welcome-state');
+
+        // State Management
+        let isProcessing = false;
+
+        // Initialize Icons on page load
+        lucide.createIcons();
+
+        // UI Logic: Create and Append Messages
+        function appendMessage(content, sender = 'user') {
+            const row = document.createElement('div');
+            row.className = 'message-row';
+            
+            // Render Markdown if it's the AI, otherwise treat as plain text
+            const parsedContent = sender === 'ai' ? marked.parse(content) : escapeHTML(content);
+            const icon = sender === 'user' ? '<i data-lucide="user" style="color: white; width: 20px;"></i>' : '<i data-lucide="sparkles" style="color: white; width: 20px;"></i>';
+
+            row.innerHTML = `
+                <div class="avatar ${sender}">
+                    ${icon}
+                </div>
+                <div class="message-content">
+                    ${parsedContent}
+                </div>
+            `;
+            
+            feed.appendChild(row);
+            lucide.createIcons(); // Refresh icons for the newly added elements
+            scrollToBottom();
+            return row;
+        }
+
+        // UI Logic: Loading Indicator
+        function toggleLoading(show) {
+            if (show) {
+                const row = document.createElement('div');
+                row.className = 'message-row loading-row';
+                row.innerHTML = `
+                    <div class="avatar ai"><i data-lucide="sparkles" style="color: white; width: 20px;"></i></div>
+                    <div class="message-content">
+                        <div class="typing-indicator">
+                            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                        </div>
+                    </div>
+                `;
+                feed.appendChild(row);
+                lucide.createIcons();
+                scrollToBottom();
+            } else {
+                const loader = document.querySelector('.loading-row');
+                if (loader) loader.remove();
+            }
+        }
+
+        // Helper Functions
+        function scrollToBottom() {
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag])
+            );
+        }
+
+        // Simulated API Call
+        async function mockAiResponse(userQuery) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(`I am a fully functional **Single File Clone**.\n\nHere is what I noticed about your query: \n> "${userQuery}"\n\n### Features built-in:\n* **Markdown Parsing:** Rendered via \`marked.js\`\n* **Icons:** Rendered via \`lucide\`\n* **Responsive:** Flexbox & CSS Grid\n\nTo connect this to a real backend, simply swap out the \`mockAiResponse\` function with a \`fetch()\` call to an LLM endpoint.`);
+                }, 1500); // Simulate network latency
+            });
+        }
+
+        // Main Controller
+        async function handleAction() {
+            const query = input.value.trim();
+            if (!query || isProcessing) return;
+
+            // Remove Welcome Screen on first chat
+            if (welcomeState) welcomeState.style.display = 'none';
+
+            // 1. Process User Input
+            isProcessing = true;
+            input.value = '';
+            appendMessage(query, 'user');
+            
+            // 2. Show Loading State
+            toggleLoading(true);
+
+            try {
+                // 3. Fetch & Render AI Response
+                const response = await mockAiResponse(query);
+                toggleLoading(false);
+                appendMessage(response, 'ai');
+            } catch (error) {
+                toggleLoading(false);
+                appendMessage("An error occurred while connecting to the server.", 'ai');
+            } finally {
+                isProcessing = false;
+                input.focus();
+            }
+        }
+
+        // Event Listeners
+        sendBtn.addEventListener('click', handleAction);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleAction();
+        });
+    </script>
+</body>
+</html>
